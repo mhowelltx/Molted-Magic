@@ -1,2 +1,5 @@
-# Placeholder — Session 2. VPC/network resource for the droplet, if the
-# DigitalOcean provider setup calls for a dedicated VPC rather than the default.
+resource "digitalocean_vpc" "openclaw" {
+  name     = "${var.droplet_name}-vpc"
+  region   = var.region
+  ip_range = var.vpc_ip_range
+}

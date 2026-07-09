@@ -1,3 +1,13 @@
-# Placeholder — Session 2. Remote state backend config. Choice between
-# Terraform Cloud workspace and DigitalOcean Spaces (S3-compatible) is not yet
-# made — record the decision in PROGRESS.md once picked, then fill this in.
+# Remote state backend: HCP Terraform (Terraform Cloud). Organization and
+# workspace names are not secrets, so they're committed directly. Auth comes
+# from the TF_TOKEN_app_terraform_io env var (never committed) via
+# `terraform login` or a manually-set user token.
+terraform {
+  cloud {
+    organization = "FlyingThunderWolfDesign"
+
+    workspaces {
+      name = "molted-magic-openclaw"
+    }
+  }
+}

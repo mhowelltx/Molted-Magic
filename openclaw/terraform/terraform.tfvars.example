@@ -1,6 +1,9 @@
-# Names only — copy to terraform.tfvars locally and fill in real values.
-# terraform.tfvars itself is gitignored; never commit real values.
+# Copy to terraform.tfvars locally and fill in real values. terraform.tfvars
+# is gitignored — never commit real values. do_token is not set here even as
+# a placeholder; it comes from the TF_VAR_do_token env var instead.
 
-region      = ""
-droplet_size = ""
-ssh_key_id  = ""
+region         = "nyc3"
+droplet_size   = "s-2vcpu-2gb"
+droplet_name   = "openclaw"
+ssh_key_id     = ""
+admin_ip_cidrs = [""]

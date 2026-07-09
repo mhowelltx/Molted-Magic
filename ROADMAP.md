@@ -18,9 +18,10 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 2 — Terraform: VPS + firewall only
 
-- [ ] `main.tf` / `variables.tf` / `outputs.tf` / `network.tf` / `firewall.tf` for a single DO droplet + cloud firewall (SSH-only inbound, no public control-UI port)
-- [ ] Remote state backend wired in `backend.tf` (Terraform Cloud workspace recommended, or DO Spaces — record the choice in PROGRESS.md)
-- [ ] Verify: `terraform init` / `validate` / `plan` clean, no apply
+- [x] `main.tf` / `variables.tf` / `outputs.tf` / `network.tf` / `firewall.tf` for a single DO droplet + cloud firewall (SSH-only inbound, no public control-UI port)
+- [x] Remote state backend wired in `backend.tf` (HCP Terraform / Terraform Cloud, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`)
+- [x] Verify: `terraform init` / `validate` / `plan` clean (3 to add: droplet, firewall, VPC — 0 change, 0 destroy), no apply
+- [ ] **Carried to Session 3**: `main.tf`'s droplet resource does not yet wire `user_data` to the cloud-init template. HCP Terraform's CLI-driven remote runs only upload the `openclaw/terraform` working directory, so a `templatefile()` reference to the sibling `../cloud-init/` path fails remotely (confirmed by testing). Session 3 needs to resolve this — likely nesting cloud-init under `openclaw/terraform/` or otherwise restructuring — before wiring `user_data` in.
 
 ## Session 3 — Cloud-init hardening + Tailscale
 

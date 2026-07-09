@@ -1,2 +1,15 @@
-# Placeholder — Session 2. Outputs: droplet public/private IP, firewall ID,
-# anything needed by later workflow steps (e.g. SSH connection info).
+output "droplet_id" {
+  value = digitalocean_droplet.openclaw.id
+}
+
+output "droplet_public_ip" {
+  value = digitalocean_droplet.openclaw.ipv4_address
+}
+
+output "vpc_id" {
+  value = digitalocean_vpc.openclaw.id
+}
+
+output "firewall_id" {
+  value = digitalocean_firewall.openclaw.id
+}
