@@ -1,0 +1,6 @@
+# Names only — copy to terraform.tfvars locally and fill in real values.
+# terraform.tfvars itself is gitignored; never commit real values.
+
+region      = ""
+droplet_size = ""
+ssh_key_id  = ""

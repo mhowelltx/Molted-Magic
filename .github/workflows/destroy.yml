@@ -1,0 +1,6 @@
+# Placeholder — Session 7. workflow_dispatch only: terraform destroy.
+# Must never share triggers with provision.yml/update.yml and must never be
+# scheduled. See CLAUDE.md's "Infra safety" guardrail.
+name: destroy
+on:
+  workflow_dispatch: {}

@@ -1,0 +1,6 @@
+# Placeholder — Session 6. workflow_dispatch: terraform init/plan/apply +
+# wait-for-SSH + install.sh + configure.sh + openclaw doctor confirmation.
+# `apply` must be gated behind manual workflow_dispatch only — never on push.
+name: provision
+on:
+  workflow_dispatch: {}

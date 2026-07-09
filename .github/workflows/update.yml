@@ -1,0 +1,5 @@
+# Placeholder — Session 8. Scheduled: SSH in, git pull, re-run configure.sh
+# (idempotent), restart the daemon.
+name: update
+on:
+  workflow_dispatch: {}

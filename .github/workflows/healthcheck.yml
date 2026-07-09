@@ -1,0 +1,5 @@
+# Placeholder — Session 8. Scheduled: run healthcheck.sh remotely, fail loudly
+# (read-only checks only — no destructive actions from a scheduled job).
+name: healthcheck
+on:
+  workflow_dispatch: {}
