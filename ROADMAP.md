@@ -4,17 +4,17 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 0 — Manual prerequisites (not a Claude Code session)
 
-- [ ] Install Git for Windows, confirm `git --version` in a new shell
-- [ ] `git config --global user.name`, `user.email`, `init.defaultBranch main`
-- [ ] Create private GitHub remote `molted-magic` at github.com/new (no auto-init)
-- [ ] `git init` + `git remote add origin ...` locally
+- [x] Install Git for Windows, confirm `git --version` in a new shell
+- [x] `git config --global user.name`, `user.email`, `init.defaultBranch main`
+- [x] Create private GitHub remote `Molted-Magic` at github.com/new (no auto-init)
+- [x] `git init` + `git remote add origin ...` locally
 - [ ] (Optional) install GitHub CLI (`gh`) for `gh secret set` / `gh run watch`
 
 ## Session 1 — Repo scaffold
 
 - [x] Full directory structure, placeholder files with one-line purpose notes
 - [x] README.md, CLAUDE.md, ROADMAP.md, PROGRESS.md, .gitignore, .env.example
-- [ ] Initial commit + push (blocked on Session 0 — git not yet installed)
+- [x] Initial commit + push
 
 ## Session 2 — Terraform: VPS + firewall only
 
