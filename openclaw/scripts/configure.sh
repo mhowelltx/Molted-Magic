@@ -25,7 +25,15 @@ OPENCLAW_MODEL="${OPENCLAW_MODEL:-claude-haiku-4-5-20251001}"
 log() { echo "[configure.sh] $*"; }
 
 : "${OPENCLAW_ANTHROPIC_KEY:?OPENCLAW_ANTHROPIC_KEY must be set — a separate, spend-capped key, never the main Anthropic key. See CLAUDE.md.}"
-: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN must be set (from @BotFather) — see openclaw-isolated-setup-plan.md Phase 3.}"
+
+# Telegram is optional, not required: the rendered config only ever names the
+# env var OpenClaw should read the token from (channels.telegram.bot_token_env
+# in openclaw.json.tmpl), never the token value itself, so there's nothing to
+# fail render-time validation on. If it's unset, the daemon just won't be able
+# to authenticate the Telegram channel until a real token is added later.
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  log "TELEGRAM_BOT_TOKEN not set — Telegram channel will be configured but unable to connect until a real token is provided (from @BotFather, see openclaw-isolated-setup-plan.md Phase 3)."
+fi
 
 mkdir -p "$WORKSPACE_DIR" "$CONFIG_DIR"
 

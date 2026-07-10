@@ -48,7 +48,8 @@ Static build sequence. Check items off as sessions complete; log the details of 
 - [x] Generated a dedicated ed25519 deploy keypair locally at `~/.ssh/molted-magic-deploy` (private key never leaves this machine / never committed)
 - [x] Verified with real `terraform validate`/`plan` using the actual generated public key (clean: 4 to add — droplet, firewall, VPC, ssh_key — 0 change/destroy, no apply)
 - [x] Updated `.env.example` to the resolved names (HCP Terraform instead of the undecided Spaces-vs-TFC choice, `TF_VAR_admin_ssh_public_key` instead of `TF_VAR_ssh_key_id`, added `SSH_DEPLOY_PRIVATE_KEY`)
-- [ ] User adds the resulting secrets to the GitHub repo (Settings → Secrets and variables → Actions) — see PROGRESS.md for the exact list; not something this session did, per `CLAUDE.md`'s guardrail that secrets always get added by the user through GitHub settings
+- [x] User added the secrets/variable to the GitHub repo as **repository secrets** (decided against environment secrets/required-reviewer gate for now — `workflow_dispatch` is enough): `DIGITALOCEAN_TOKEN`, `TF_TOKEN_app_terraform_io`, `SSH_DEPLOY_PRIVATE_KEY`, `OPENCLAW_ANTHROPIC_KEY`, and variable `TF_VAR_admin_ssh_public_key`. `TELEGRAM_BOT_TOKEN`/`TF_VAR_tailscale_authkey` intentionally left unset.
+- [x] Relaxed `configure.sh`'s hard requirement on `TELEGRAM_BOT_TOKEN` to a warning (it never needed the value at render time, only the env var *name* is written into config) — re-verified with shellcheck + a scratch end-to-end run with the token unset
 
 ## Session 6 — provision.yml
 
