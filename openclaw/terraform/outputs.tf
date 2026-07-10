@@ -13,3 +13,7 @@ output "vpc_id" {
 output "firewall_id" {
   value = digitalocean_firewall.openclaw.id
 }
+
+output "ssh_key_id" {
+  value = digitalocean_ssh_key.admin.id
+}

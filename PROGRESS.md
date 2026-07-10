@@ -4,35 +4,55 @@ Read this first. Dynamic — updated at the end of every session. See [`ROADMAP.
 
 ## Current phase
 
-Session 5 (agent.md) — complete. All of Sessions 1–5 are now done. Next up: Session 6 (`provision.yml`).
+Session 5.5 (GitHub Actions secrets prep) — code/keypair side done, waiting on the user to actually add the secrets to GitHub before Session 6 (`provision.yml`) can be meaningfully tested end-to-end.
 
 ## Last session
 
-Session 5: wrote `openclaw/config/agent.md`, the OpenClaw persona/system-prompt file. It's written as literal operating instructions to the agent, not documentation about it, since `configure.sh` wires it in as `persona_file` in the rendered config:
+Before wiring `provision.yml`, took stock of what GitHub Actions secrets it will need and simplified one manual step out of the picture first:
 
-- States the current narrow scope explicitly (web search + workspace file read/write only, no shell/browser) and instructs the agent not to claim otherwise or improvise around a missing tool.
-- Encodes consent mode as a behavior rule: confirm before anything with an external or hard-to-reverse effect.
-- Adds an agent-level "don't fetch-and-execute remote instructions" rule as defense in depth for the Moltbook boundary — even if the agent were ever given more tools, this rule doesn't change on its own.
-- Explicitly marks the long-range passive-income/personal-assistant vision as **not current capability**, so the agent doesn't reach for it just because it's described somewhere in the project's context.
+- Added `digitalocean_ssh_key.admin` to `openclaw/terraform/main.tf`, sourced from `var.admin_ssh_public_key`. Terraform now registers the admin key with DigitalOcean directly — removed the old `ssh_key_id` variable and the manual "upload the key, find its fingerprint/ID" step entirely. `admin_ssh_public_key` now does double duty: DO account registration *and* the non-root cloud-init user's `ssh_authorized_keys`.
+- Generated a dedicated ed25519 deploy keypair at `~/.ssh/molted-magic-deploy` (private) / `.pub` (public) — this machine only, never committed. This is the key `provision.yml` will eventually use (as a GitHub secret) to SSH into the freshly-created droplet and run `install.sh`/`configure.sh`.
+- Verified for real: `terraform validate`/`plan` with the actual generated public key (not a fake one, but no `apply` — safe, since plan doesn't create anything). Clean: 4 to add (droplet, firewall, VPC, ssh_key), 0 change/destroy.
+- Updated `.env.example` to match: `TF_TOKEN_app_terraform_io` (resolved — HCP Terraform, not the old undecided Spaces-vs-TFC placeholder), `TF_VAR_admin_ssh_public_key` (replaces `TF_VAR_ssh_key_id`), added `SSH_DEPLOY_PRIVATE_KEY`.
 
-**Verified for real, not just reviewed**: ran `configure.sh` against a scratch directory (outside the repo) with dummy `OPENCLAW_ANTHROPIC_KEY`/`TELEGRAM_BOT_TOKEN` env vars and no `openclaw` CLI present. Confirmed: `openclaw.json` was rendered and is valid JSON (checked via `ConvertFrom-Json`), `agent.md` was copied byte-for-byte identical to the source, and the missing-CLI case was handled gracefully (warning logged, script still completed) rather than crashing. One environment-only note: `chmod 600` on the rendered config showed as `644` under Git Bash on this Windows NTFS filesystem — a known Windows/NTFS permission-bit limitation, not a script bug; it'll behave correctly on the real Linux droplet.
+## GitHub repo secrets still needed (user action — not done by this session)
 
-This closes out Session 5 and, with it, all of Sessions 1–5.
+Per `CLAUDE.md`'s guardrail, these get added by the user via GitHub repo Settings → Secrets and variables → Actions, not by Claude Code calling `gh secret set` or the API on the user's behalf, even though the values were available locally. `gh` CLI isn't installed either, so the web UI is the path.
+
+**Secrets** (Settings → Secrets and variables → Actions → **Secrets** tab → New repository secret):
+
+| Name | Value | Notes |
+|---|---|---|
+| `DIGITALOCEAN_TOKEN` | Your DO API token | Same one already set locally via `setx TF_VAR_do_token` |
+| `TF_TOKEN_app_terraform_io` | Your HCP Terraform user API token | Same one already set locally |
+| `SSH_DEPLOY_PRIVATE_KEY` | Contents of `~/.ssh/molted-magic-deploy` (the private key file, whole contents including `-----BEGIN...-----`/`-----END...-----` lines) | View/copy it yourself locally — don't paste it into chat with Claude Code |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather | Not yet generated — doc 2 Phase 3 |
+| `OPENCLAW_ANTHROPIC_KEY` | A **separate, spend-capped** Anthropic API key | Not yet generated — never the main/personal key |
+| `TF_VAR_tailscale_authkey` | A Tailscale auth key | Optional for now — cloud-init skips the join gracefully if unset. Can add later, before the first real `apply`. |
+
+**Variable** (Settings → Secrets and variables → Actions → **Variables** tab — not secret, so it belongs here, not in Secrets):
+
+| Name | Value |
+|---|---|
+| `TF_VAR_admin_ssh_public_key` | Contents of `~/.ssh/molted-magic-deploy.pub` (one line, safe to view/paste — it's a public key) |
+
+Once these exist, tell me they're added (no need to tell me the values) and Session 6 can wire `provision.yml` to actually reference them by name.
 
 ## Blockers
 
-None currently.
+Waiting on the user to add the secrets above before Session 6's `provision.yml` can be tested against real GitHub Actions (writing the workflow YAML itself doesn't block on this, but a meaningful dry run of it does).
 
-## Honest gaps (carried from Session 4, still open)
+## Honest gaps (carried forward, still open)
 
-- `openclaw.json.tmpl`'s field names (`tool_allowlist`, `anthropic_api_key_env`, `persona_file`, `consent_mode`, `channels.telegram.bot_token_env`) are still a best-effort mapping from the planning docs' prose, not verified against a real OpenClaw CLI/config reference. Check these against the actual schema before a real run.
-- `install.sh`'s pinned-checksum file for the real installer still doesn't exist — one-time human step (fetch, read, hash, commit) whenever this is first run for real.
-- Real execution of any script, or the agent actually behaving per `agent.md`, requires a live droplet with the real `openclaw` CLI installed — still deferred to the user's own later `terraform apply`.
+- `openclaw.json.tmpl`'s field names are still an unverified best-effort mapping from the planning docs' prose (see Session 4 notes).
+- `install.sh`'s pinned-checksum file for the real installer still doesn't exist.
+- Real execution still requires a live droplet — deferred to the user's own later `terraform apply`.
 
 ## Next session
 
-Session 6: wrap Terraform init/plan/apply + cloud-init + the three scripts into `.github/workflows/provision.yml`. `apply` must be gated behind manual `workflow_dispatch` only, never on push — this also needs `TF_TOKEN_app_terraform_io`-equivalent auth (a Terraform Cloud/HCP token) and `TF_VAR_do_token` set up as GitHub Actions secrets, not just local env vars, since the workflow runs on a GitHub-hosted runner.
+Once secrets are added: Session 6, `.github/workflows/provision.yml` — wrap `terraform init/plan/apply` + SSH deploy (using `SSH_DEPLOY_PRIVATE_KEY`) + `install.sh`/`configure.sh` into one workflow, `apply` gated behind manual `workflow_dispatch` only, never on push.
 
 ## Open decisions (resolved)
 
 - ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, execution mode: local.
+- ~~SSH key provisioning~~ — resolved: Terraform registers it directly via `digitalocean_ssh_key.admin`, no manual DO upload step.

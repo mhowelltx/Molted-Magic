@@ -5,9 +5,8 @@
 region               = "nyc3"
 droplet_size         = "s-2vcpu-2gb"
 droplet_name         = "openclaw"
-ssh_key_id           = ""
 admin_ip_cidrs       = [""]
-admin_ssh_public_key = "" # contents of a public key file, e.g. ssh-ed25519 AAAA...
+admin_ssh_public_key = "" # contents of a public key .pub file, e.g. ssh-ed25519 AAAA... — Terraform registers this with DigitalOcean directly, no manual upload needed
 
 # tailscale_authkey is intentionally not listed here — it's sensitive and
 # comes from the TF_VAR_tailscale_authkey env var instead.

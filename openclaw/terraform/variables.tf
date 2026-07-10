@@ -26,11 +26,6 @@ variable "image" {
   default     = "ubuntu-24-04-x64"
 }
 
-variable "ssh_key_id" {
-  description = "Fingerprint or ID of the SSH key already uploaded to the DigitalOcean account."
-  type        = string
-}
-
 variable "admin_username" {
   description = "Non-root admin username created by cloud-init on first boot."
   type        = string
@@ -55,7 +50,7 @@ variable "tags" {
 }
 
 variable "admin_ssh_public_key" {
-  description = "Public key content (not the DO key ID) granted to the non-root admin user by cloud-init. Public keys aren't secret, but this is still passed as a variable rather than hardcoded so it's easy to rotate."
+  description = "Public key content (e.g. the contents of an .pub file) — dual purpose: registered as a DigitalOcean account SSH key (digitalocean_ssh_key.admin) so the droplet trusts it at boot, AND granted to the non-root admin user by cloud-init. Not secret, but still a variable rather than hardcoded so it's easy to rotate."
   type        = string
 }
 

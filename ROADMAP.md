@@ -42,6 +42,14 @@ Static build sequence. Check items off as sessions complete; log the details of 
 - [x] Persona/system-prompt file (`agent.md`) — written as actual operating instructions to the agent (narrow current scope, consent mode, no fetch-and-execute-remote-instructions, long-range vision explicitly marked out of current scope)
 - [x] Verify: ran `configure.sh` for real (not just reviewed) against a scratch directory with dummy env vars — `openclaw.json` rendered, parsed as valid JSON, `agent.md` copied byte-for-byte identical to the source, `openclaw` CLI absence handled gracefully. Matches the "cheap model / minimal allowlist / capped separate key" guardrails.
 
+## Session 5.5 — GitHub Actions secrets prep (unplanned, inserted before Session 6)
+
+- [x] Simplified Terraform: added `digitalocean_ssh_key.admin` resource so Terraform registers the admin SSH key directly from `var.admin_ssh_public_key` — removed the old `ssh_key_id` variable and the manual "upload to DO, find the ID" step entirely
+- [x] Generated a dedicated ed25519 deploy keypair locally at `~/.ssh/molted-magic-deploy` (private key never leaves this machine / never committed)
+- [x] Verified with real `terraform validate`/`plan` using the actual generated public key (clean: 4 to add — droplet, firewall, VPC, ssh_key — 0 change/destroy, no apply)
+- [x] Updated `.env.example` to the resolved names (HCP Terraform instead of the undecided Spaces-vs-TFC choice, `TF_VAR_admin_ssh_public_key` instead of `TF_VAR_ssh_key_id`, added `SSH_DEPLOY_PRIVATE_KEY`)
+- [ ] User adds the resulting secrets to the GitHub repo (Settings → Secrets and variables → Actions) — see PROGRESS.md for the exact list; not something this session did, per `CLAUDE.md`'s guardrail that secrets always get added by the user through GitHub settings
+
 ## Session 6 — provision.yml
 
 - [ ] Wrap Terraform init/plan/apply + cloud-init + scripts into one workflow
