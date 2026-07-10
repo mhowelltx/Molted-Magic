@@ -22,9 +22,9 @@ resource "digitalocean_droplet" "openclaw" {
   ssh_keys = [var.ssh_key_id]
   tags     = var.tags
 
-  # user_data wiring deferred to Session 3: HCP Terraform's CLI-driven remote
-  # runs only upload this working directory, so a templatefile() reference to
-  # the sibling ../cloud-init/ path fails remotely even though it works
-  # locally. Session 3 needs to either nest cloud-init under this directory
-  # or otherwise restructure before wiring it in.
+  user_data = templatefile("${path.module}/../cloud-init/user-data.yml.tmpl", {
+    admin_username       = var.admin_username
+    admin_ssh_public_key = var.admin_ssh_public_key
+    tailscale_authkey    = var.tailscale_authkey
+  })
 }

@@ -4,33 +4,31 @@ Read this first. Dynamic — updated at the end of every session. See [`ROADMAP.
 
 ## Current phase
 
-Session 2 (Terraform: VPS + firewall) — complete, with one carry-forward item. Next up: Session 3 (cloud-init hardening + Tailscale).
+Session 3 (cloud-init hardening + Tailscale) — complete. Next up: Session 4 (install.sh / configure.sh / healthcheck.sh).
 
 ## Last session
 
-Session 2: wrote `openclaw/terraform/{main,variables,outputs,network,firewall,backend}.tf` for a single DigitalOcean droplet (`ubuntu-24-04-x64`, region/size as variables) + a dedicated VPC + a cloud firewall (SSH/22 inbound only, restricted to `admin_ip_cidrs`; no inbound rule at all for the OpenClaw control-UI port — it's Tailscale-only). Backend is HCP Terraform (org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, both already created by the user).
+Session 3: wrote real content for `openclaw/cloud-init/user-data.yml.tmpl` — non-root admin user (`openclaw-admin` by default) with sudo, root login and password auth disabled, ufw allowing SSH only (deny incoming / allow outgoing by default), unattended-upgrades enabled, Tailscale installed and joined via `tailscale up --authkey` (skipped if the auth key variable is empty rather than run with an empty key).
 
-Installed Terraform CLI locally (via winget) and ran real verification against the actual backend and DigitalOcean provider (auth via `TF_TOKEN_app_terraform_io` and `TF_VAR_do_token` env vars set locally via `setx` — never committed):
-- `terraform init` — succeeded against the real HCP Terraform workspace.
-- `terraform validate` — passed.
-- `terraform plan` (with a local, gitignored, dummy `terraform.tfvars` — fake ssh key fingerprint, TEST-NET-3 example IP — deleted after the run) — clean: 3 to add (droplet, firewall, VPC), 0 to change, 0 to destroy. No `apply` was run.
+Resolved the carry-forward item from Session 2: `main.tf`'s `templatefile()` reference to the sibling `../cloud-init/` directory failed under HCP Terraform's default `remote` execution mode (confirmed by testing). Fixed by switching the `molted-magic-openclaw` workspace to **local execution mode** via the HCP Terraform API — state still lives in HCP Terraform (locking, history), but `plan`/`apply` now compute wherever `terraform` is invoked, which has the full repo checked out. This is documented in a comment in `backend.tf` so a future session doesn't flip it back to `remote` without also fixing the directory reference. This also better fits how `provision.yml` (Session 6) will need to chain Terraform outputs straight into an SSH step.
 
-`.terraform.lock.hcl` was generated and is now committed (standard practice — pins provider versions).
+Added two new Terraform variables: `admin_ssh_public_key` (not secret, but templated rather than hardcoded — DigitalOcean's `ssh_keys` droplet attribute only targets root, so the cloud-init-created non-root admin user needs its own explicit key) and `tailscale_authkey` (sensitive, default `""`, sourced via `TF_VAR_tailscale_authkey`).
+
+Verified for real: `terraform validate` passed; `terraform plan` (using a local, gitignored, dummy `terraform.tfvars` — fake SSH key fingerprint and public key, TEST-NET-3 example IP, deleted after the run) came back clean, still 3 to add / 0 change / 0 destroy. Used `terraform console` to render the actual cloud-init output with the template variables substituted and reviewed it line-by-line against doc 2 Phase 1's checklist (non-root user, SSH-key-only, ufw, unattended-upgrades, Tailscale) — all present and correctly rendered. One early bug caught this way: an explanatory comment in the template itself contained literal `${...}` text, which `templatefile()` tried to parse as an expression and errored on — fixed by rewording the comment.
 
 ## Blockers
 
 None currently.
 
-## Carried forward to Session 3
+## Honest gaps (flagged, not glossed over)
 
-`main.tf`'s droplet resource does **not** yet set `user_data`. The original plan was to reference `openclaw/cloud-init/user-data.yml.tmpl` via `templatefile()`, but HCP Terraform's CLI-driven remote runs only upload the `openclaw/terraform` working directory to the remote runner — a relative reference to the sibling `../cloud-init/` directory fails during a remote `plan` even though the same config works fine locally (confirmed by testing: `Invalid value for "path" parameter: no file exists at "./../cloud-init/user-data.yml.tmpl"`). This is a real conflict between doc 1's original sibling-directory layout (`terraform/`, `cloud-init/` as siblings under `openclaw/`) and how HCP Terraform CLI-driven workspaces package configuration for remote execution.
-
-Session 3 needs to decide how to resolve this before wiring `user_data` in — options include nesting `cloud-init/` under `openclaw/terraform/`, or changing the HCP Terraform workspace's execution mode/working directory settings. Doesn't block Session 3's actual cloud-init content work, just the final wiring step back into `main.tf`.
+- No `cloud-init schema` validator or Python/PyYAML available locally, so the cloud-init YAML was checked by rendering + manual line-by-line review against the doc 2 checklist, not a formal schema lint.
+- Tailscale actually joining the tailnet, and the non-root user actually being reachable over SSH, can't be proven without a live droplet boot — this remains deferred to the user's own later `terraform apply`.
 
 ## Next session
 
-Session 3: write real content for `openclaw/cloud-init/user-data.yml.tmpl` (non-root user, SSH-key-only sshd, ufw mirroring the DO firewall, unattended-upgrades, Tailscale join) — and resolve the directory-structure conflict above before wiring it into `main.tf`'s `user_data` argument.
+Session 4: write `openclaw/scripts/install.sh` (Node 22+, OpenClaw official installer — reviewed, not blind-piped), `configure.sh` (narrow workspace dir, cheap default model, minimal tool allowlist, Telegram/BotFather channel wiring), and `healthcheck.sh` (wraps `openclaw doctor`, exit-code driven). Verify via shellcheck + manual cross-check against doc 2 Phases 2–4; real execution is deferred to a live box.
 
 ## Open decisions (resolved)
 
-- ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`.
+- ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, **execution mode: local** (changed from the HCP default of `remote` in Session 3 — see `backend.tf` comment for why).

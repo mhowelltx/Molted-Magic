@@ -21,12 +21,13 @@ Static build sequence. Check items off as sessions complete; log the details of 
 - [x] `main.tf` / `variables.tf` / `outputs.tf` / `network.tf` / `firewall.tf` for a single DO droplet + cloud firewall (SSH-only inbound, no public control-UI port)
 - [x] Remote state backend wired in `backend.tf` (HCP Terraform / Terraform Cloud, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`)
 - [x] Verify: `terraform init` / `validate` / `plan` clean (3 to add: droplet, firewall, VPC — 0 change, 0 destroy), no apply
-- [ ] **Carried to Session 3**: `main.tf`'s droplet resource does not yet wire `user_data` to the cloud-init template. HCP Terraform's CLI-driven remote runs only upload the `openclaw/terraform` working directory, so a `templatefile()` reference to the sibling `../cloud-init/` path fails remotely (confirmed by testing). Session 3 needs to resolve this — likely nesting cloud-init under `openclaw/terraform/` or otherwise restructuring — before wiring `user_data` in.
+- [x] **Carried to Session 3, now resolved**: `main.tf`'s droplet resource now wires `user_data` to the cloud-init template. Fixed by switching the HCP Terraform workspace's execution mode from `remote` to `local` rather than restructuring directories.
 
 ## Session 3 — Cloud-init hardening + Tailscale
 
-- [ ] `user-data.yml.tmpl`: non-root user, SSH-key-only sshd, ufw mirroring the DO firewall, unattended-upgrades, Tailscale join
-- [ ] Verify: YAML/cloud-init lint + manual checklist against doc 2 Phase 1 (Tailscale join itself can't be proven without a live box)
+- [x] `user-data.yml.tmpl`: non-root user, SSH-key-only sshd, ufw mirroring the DO firewall, unattended-upgrades, Tailscale join (skipped if `tailscale_authkey` is empty)
+- [x] `user_data` wired into `main.tf`'s droplet resource
+- [x] Verify: `terraform validate`/`plan` clean with cloud-init wired in (still 3 to add, 0 change/destroy); rendered actual output via `terraform console` and checked line-by-line against doc 2 Phase 1. No `cloud-init schema` tool or Python available locally for a formal lint — noted as a gap. Tailscale join itself still can't be proven without a live box.
 
 ## Session 4 — install.sh / configure.sh / healthcheck.sh
 

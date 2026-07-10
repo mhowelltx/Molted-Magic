@@ -1,3 +1,61 @@
-# Placeholder — Session 3. First-boot cloud-init: non-root user creation,
-# SSH-key-only sshd_config, ufw rules mirroring the DO firewall,
-# unattended-upgrades, Tailscale install + tailnet join.
+#cloud-config
+# Rendered by Terraform's templatefile() in openclaw/terraform/main.tf.
+# Terraform template placeholders are substituted before cloud-init ever sees
+# this file — what actually reaches the droplet is plain cloud-config YAML
+# with no template syntax left in it.
+
+hostname: openclaw
+
+users:
+  - name: ${admin_username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${admin_ssh_public_key}
+
+# DigitalOcean's own SSH-key injection targets root; since root login is
+# disabled below, the admin user above needs its own explicit key (same
+# public key content, added via var.admin_ssh_public_key).
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages:
+  - ufw
+  - unattended-upgrades
+  - curl
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+runcmd:
+  # ufw: SSH only, deny everything else inbound — mirrors the DigitalOcean
+  # cloud firewall in openclaw/terraform/firewall.tf. Defense in depth: this
+  # rule set is redundant with the cloud firewall by design, not a substitute
+  # for it.
+  - [ ufw, allow, OpenSSH ]
+  - [ ufw, default, deny, incoming ]
+  - [ ufw, default, allow, outgoing ]
+  - [ ufw, --force, enable ]
+  - [ systemctl, restart, ssh ]
+
+  # Tailscale: private-network-only access to the eventual OpenClaw control
+  # UI. If tailscale_authkey is empty (var.tailscale_authkey default ""),
+  # `tailscale up` is skipped rather than run with an empty --authkey.
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - |
+    if [ -n "${tailscale_authkey}" ]; then
+      tailscale up --authkey="${tailscale_authkey}" --ssh
+    fi

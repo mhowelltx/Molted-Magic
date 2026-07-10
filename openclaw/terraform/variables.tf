@@ -53,3 +53,15 @@ variable "tags" {
   type        = list(string)
   default     = ["openclaw", "molted-magic"]
 }
+
+variable "admin_ssh_public_key" {
+  description = "Public key content (not the DO key ID) granted to the non-root admin user by cloud-init. Public keys aren't secret, but this is still passed as a variable rather than hardcoded so it's easy to rotate."
+  type        = string
+}
+
+variable "tailscale_authkey" {
+  description = "Tailscale auth key used by cloud-init to join the tailnet on first boot. Set via TF_VAR_tailscale_authkey env var — never committed. Leave empty to skip joining Tailscale."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

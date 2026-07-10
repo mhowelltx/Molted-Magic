@@ -2,8 +2,12 @@
 # is gitignored — never commit real values. do_token is not set here even as
 # a placeholder; it comes from the TF_VAR_do_token env var instead.
 
-region         = "nyc3"
-droplet_size   = "s-2vcpu-2gb"
-droplet_name   = "openclaw"
-ssh_key_id     = ""
-admin_ip_cidrs = [""]
+region               = "nyc3"
+droplet_size         = "s-2vcpu-2gb"
+droplet_name         = "openclaw"
+ssh_key_id           = ""
+admin_ip_cidrs       = [""]
+admin_ssh_public_key = "" # contents of a public key file, e.g. ssh-ed25519 AAAA...
+
+# tailscale_authkey is intentionally not listed here — it's sensitive and
+# comes from the TF_VAR_tailscale_authkey env var instead.
