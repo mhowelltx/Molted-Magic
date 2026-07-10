@@ -62,8 +62,9 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 7 — destroy.yml
 
-- [ ] Separate, manually-triggered workflow, no shared triggers with provision.yml
-- [ ] Verify: syntax check, confirm zero automatic triggers
+- [x] Separate, manually-triggered workflow (`.github/workflows/destroy.yml`), no shared triggers with `provision.yml` — its own `workflow_dispatch` only, nothing else
+- [x] Added a second safety gate beyond `workflow_dispatch` itself: a required `confirm` input that must exactly equal `"destroy"`, checked by an explicit guard step that fails loudly (`::error::` + non-zero exit) rather than silently skipping the job if it doesn't match
+- [x] Verify: `actionlint` clean; confirmed the `on:` block has no `push`/`pull_request`/`schedule` trigger at all; cross-checked the `env:` block's secret/variable names character-for-character against `provision.yml`'s (already-verified-correct) block to avoid repeating the case-mismatch bug from Session 6
 
 ## Session 8 — update.yml + healthcheck.yml
 

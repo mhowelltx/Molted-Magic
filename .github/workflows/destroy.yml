@@ -1,6 +1,57 @@
-# Placeholder — Session 7. workflow_dispatch only: terraform destroy.
-# Must never share triggers with provision.yml/update.yml and must never be
-# scheduled. See CLAUDE.md's "Infra safety" guardrail.
 name: destroy
+
+# Manual only, and gated behind typing an exact confirmation phrase in the
+# workflow_dispatch form — not just clicking "Run workflow". This workflow
+# must never gain a push/pull_request/schedule trigger, and must never be
+# folded into provision.yml/update.yml. See CLAUDE.md's "Infra safety"
+# guardrail: this is the safety valve to nuke the whole box from GitHub's UI,
+# and it stays deliberately separate and manually-triggered only.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type exactly "destroy" to permanently delete the droplet, firewall, VPC, and SSH key. Anything else aborts.'
+        required: true
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openclaw/terraform
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_TOKEN_app_terraform_io }}
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_admin_ssh_public_key: ${{ vars.TF_VAR_admin_ssh_public_key }}
+      TF_VAR_tailscale_authkey: ${{ secrets.TF_VAR_tailscale_authkey }}
+      TF_VAR_admin_ip_cidrs: ${{ vars.TF_VAR_admin_ip_cidrs }}
+    steps:
+      # Fails loudly (not a silently-skipped job) if the phrase doesn't match
+      # exactly. Every later step in this job is unconditional and relies on
+      # GitHub Actions' default behavior of stopping the job after a failed
+      # step, rather than needing its own `if:` guard repeated everywhere.
+      - name: Verify confirmation phrase
+        if: ${{ inputs.confirm != 'destroy' }}
+        run: |
+          echo "::error::Confirmation phrase did not match 'destroy' exactly. Nothing was destroyed. Re-run and type it exactly if you meant to."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init
+
+      - name: terraform destroy
+        run: terraform destroy -input=false -auto-approve
+
+      - name: Summary
+        run: |
+          {
+            echo "### OpenClaw infrastructure destroyed"
+            echo "Droplet, firewall, VPC, and SSH key have been torn down via \`terraform destroy\`."
+            echo "State still lives in the HCP Terraform workspace — re-running provision.yml starts clean from here."
+          } >> "$GITHUB_STEP_SUMMARY"
