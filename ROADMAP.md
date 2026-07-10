@@ -39,8 +39,8 @@ Static build sequence. Check items off as sessions complete; log the details of 
 ## Session 5 — openclaw.json.tmpl + agent.md
 
 - [x] Config template (model, allowlist shape, workspace path placeholders) — done in Session 4, ahead of schedule, because `configure.sh` needed real content to render meaningfully
-- [ ] Persona/system-prompt file (`agent.md` is still the Session 1 placeholder — remaining Session 5 work)
-- [ ] Verify: template renders with example values substituted, matches "cheap model / minimal allowlist / capped separate key" guardrails (done for the config template in Session 4; still applies to agent.md content once written)
+- [x] Persona/system-prompt file (`agent.md`) — written as actual operating instructions to the agent (narrow current scope, consent mode, no fetch-and-execute-remote-instructions, long-range vision explicitly marked out of current scope)
+- [x] Verify: ran `configure.sh` for real (not just reviewed) against a scratch directory with dummy env vars — `openclaw.json` rendered, parsed as valid JSON, `agent.md` copied byte-for-byte identical to the source, `openclaw` CLI absence handled gracefully. Matches the "cheap model / minimal allowlist / capped separate key" guardrails.
 
 ## Session 6 — provision.yml
 
