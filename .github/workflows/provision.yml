@@ -1,6 +1,137 @@
-# Placeholder — Session 6. workflow_dispatch: terraform init/plan/apply +
-# wait-for-SSH + install.sh + configure.sh + openclaw doctor confirmation.
-# `apply` must be gated behind manual workflow_dispatch only — never on push.
 name: provision
+
+# Manual only. `terraform_action` defaults to "plan" so a run started by
+# mistake (or without reading the input) never creates real, billed
+# infrastructure — apply requires deliberately selecting it from the
+# workflow_dispatch UI, not just clicking "Run workflow". Never add a push,
+# pull_request, or schedule trigger here — see CLAUDE.md's "Infra safety"
+# guardrail and destroy.yml's equivalent isolation.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "plan (safe, default) or apply (creates real infrastructure)"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - apply
+
+concurrency:
+  group: provision
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.terraform_action }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openclaw/terraform
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_TOKEN_app_terraform_io }}
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_admin_ssh_public_key: ${{ vars.TF_VAR_admin_ssh_public_key }}
+      TF_VAR_tailscale_authkey: ${{ secrets.TF_VAR_tailscale_authkey }}
+      TF_VAR_admin_ip_cidrs: ${{ vars.TF_VAR_admin_ip_cidrs }}
+    outputs:
+      droplet_ip: ${{ steps.outputs.outputs.droplet_ip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init
+
+      - name: terraform validate
+        run: terraform validate
+
+      - name: terraform plan
+        run: terraform plan -out=tfplan -input=false
+
+      # Only reachable when the human explicitly chose "apply" in the
+      # workflow_dispatch form — see CLAUDE.md: never run apply without the
+      # user deliberately triggering that specific run.
+      - name: terraform apply
+        if: ${{ inputs.terraform_action == 'apply' }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture droplet IP
+        id: outputs
+        if: ${{ inputs.terraform_action == 'apply' }}
+        run: echo "droplet_ip=$(terraform output -raw droplet_public_ip)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Install & configure OpenClaw
+    needs: terraform
+    if: ${{ inputs.terraform_action == 'apply' }}
+    runs-on: ubuntu-latest
+    env:
+      DROPLET_IP: ${{ needs.terraform.outputs.droplet_ip }}
+      # Keep in sync with var.admin_username's default in
+      # openclaw/terraform/variables.tf if that ever changes.
+      ADMIN_USERNAME: openclaw-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write deploy key
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_DEPLOY_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+
+      - name: Wait for SSH
+        run: |
+          for i in $(seq 1 30); do
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+                 -i ~/.ssh/id_ed25519 "$ADMIN_USERNAME@$DROPLET_IP" true; then
+              echo "SSH is up."
+              exit 0
+            fi
+            echo "Waiting for SSH... ($i/30)"
+            sleep 10
+          done
+          echo "Timed out waiting for SSH."
+          exit 1
+
+      - name: Copy scripts and config to the droplet
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" "mkdir -p ~/molted-magic/openclaw"
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 -r \
+            openclaw/scripts openclaw/config \
+            "$ADMIN_USERNAME@$DROPLET_IP:~/molted-magic/openclaw/"
+
+      - name: Run install.sh + configure.sh
+        run: |
+          # printf %q shell-escapes each value so it's safe to splice into the
+          # heredoc below regardless of its content — avoids passing secrets
+          # as literal SSH/command-line arguments (which a `ps aux` on either
+          # end could observe) in favor of piping them over stdin instead.
+          anthropic_escaped=$(printf '%q' "${{ secrets.OPENCLAW_ANTHROPIC_KEY }}")
+          telegram_escaped=$(printf '%q' "${{ secrets.TELEGRAM_BOT_TOKEN }}")
+          # shellcheck disable=SC2087 # client-side expansion of $anthropic_escaped/$telegram_escaped into the heredoc is intentional here, not the usual footgun
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" bash -s <<REMOTE
+          set -euo pipefail
+          export OPENCLAW_ANTHROPIC_KEY=$anthropic_escaped
+          export TELEGRAM_BOT_TOKEN=$telegram_escaped
+          bash ~/molted-magic/openclaw/scripts/install.sh
+          bash ~/molted-magic/openclaw/scripts/configure.sh
+          REMOTE
+
+      - name: Healthcheck
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" bash ~/molted-magic/openclaw/scripts/healthcheck.sh
+
+      - name: Summary
+        run: |
+          {
+            echo "### OpenClaw provisioned"
+            echo "Droplet public IP: \`$DROPLET_IP\`"
+            echo "SSH only, over the admin firewall rule — the control UI is never public. Use Tailscale/SSH to reach it, never the raw public IP for anything but SSH."
+          } >> "$GITHUB_STEP_SUMMARY"

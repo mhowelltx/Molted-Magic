@@ -53,9 +53,12 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 6 — provision.yml
 
-- [ ] Wrap Terraform init/plan/apply + cloud-init + scripts into one workflow
-- [ ] `apply` gated behind manual `workflow_dispatch`, never on push
-- [ ] Verify: workflow syntax accepted, `apply` step confirmed unreachable via push/PR
+- [x] Wrapped Terraform init/validate/plan/apply + wait-for-SSH + `install.sh`/`configure.sh`/`healthcheck.sh` into `.github/workflows/provision.yml` (two jobs: `terraform`, then `deploy` gated on `needs: terraform` + apply having actually run)
+- [x] `apply` gated behind a `workflow_dispatch` choice input (`terraform_action`, default `plan`) — the entire workflow has no push/pull_request/schedule trigger at all, not just the apply step
+- [x] Added sensible non-secret defaults for `region`/`droplet_size` in `variables.tf` (`nyc3` / `s-2vcpu-2gb`) so fewer GH Actions variables are required; `admin_ip_cidrs` deliberately kept with no default (security-sensitive, fails closed if unset)
+- [x] Verify: installed `actionlint` locally, ran it for real — clean (one intentional `SC2087` suppressed with a documented disable comment: client-side heredoc expansion of escaped secrets is intentional here, not the usual footgun). Caught and fixed a real bug this way: the workflow referenced `TF_VAR_ADMIN_SSH_PUBLIC_KEY`/`TF_VAR_TAILSCALE_AUTHKEY` in uppercase, but the actual GitHub secret/variable names set up in Session 5.5 are mixed-case (`TF_VAR_admin_ssh_public_key`, `TF_VAR_tailscale_authkey`) — GitHub secret/variable lookups are case-sensitive, so this would have silently resolved to empty strings at runtime. Fixed to match exactly.
+- [ ] **New requirement surfaced**: a `TF_VAR_admin_ip_cidrs` repository **variable** (not secret) is now needed — no default exists for it by design, so `terraform plan`/`apply` in CI will fail until the user adds it. Not a blocker for this session's work, but needed before a real CI run.
+- [ ] **Not yet verified live**: the `deploy` job (wait-for-SSH, scp, remote install/configure, healthcheck) has no droplet to run against yet, so it's reviewed carefully (quoting, secret handling via `printf %q` + stdin heredoc instead of command-line args) but not exercised end-to-end. Deferred to the user's own later `terraform apply`.
 
 ## Session 7 — destroy.yml
 
