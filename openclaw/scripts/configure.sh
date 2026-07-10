@@ -52,6 +52,19 @@ cp "$PERSONA_SRC" "$CONFIG_DIR/agent.md"
 log "Config written: model=$OPENCLAW_MODEL workspace=$WORKSPACE_DIR"
 
 if command -v openclaw >/dev/null 2>&1; then
+  # Daemon lifecycle lives here, not install.sh: this is the idempotent
+  # script that reruns on every update.yml pass, so "ensure installed, then
+  # restart to pick up the just-rendered config" belongs in the same place
+  # as the config render itself, not split across two scripts. `daemon
+  # status`/`daemon install`/`daemon restart` subcommand names are inferred
+  # from doc 2 Phase 5 ("openclaw daemon install") the same way the rest of
+  # openclaw.json.tmpl's schema is — unverified against a real CLI reference.
+  if ! openclaw daemon status >/dev/null 2>&1; then
+    log "OpenClaw daemon not yet installed — installing..."
+    openclaw daemon install
+  fi
+  log "Restarting OpenClaw daemon to pick up the new config..."
+  openclaw daemon restart
   openclaw doctor || log "openclaw doctor reported issues — review before proceeding."
 else
   log "openclaw CLI not found on PATH — run install.sh first. Config was still written."

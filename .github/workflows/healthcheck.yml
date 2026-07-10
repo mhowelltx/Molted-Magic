@@ -1,5 +1,60 @@
-# Placeholder — Session 8. Scheduled: run healthcheck.sh remotely, fail loudly
-# (read-only checks only — no destructive actions from a scheduled job).
 name: healthcheck
+
+# Every 6 hours, plus on-demand via workflow_dispatch. Runs healthcheck.sh
+# (already deployed by provision.yml/update.yml) remotely — read-only, no
+# destructive actions, no re-sync of scripts. Fails loudly (a real GitHub
+# Actions failure notification) only when infrastructure exists and is
+# actually unhealthy; gracefully no-ops (green, not red) when nothing has
+# been provisioned yet, same reasoning as update.yml — that's expected
+# current state, not a failure.
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_TOKEN_app_terraform_io }}
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_admin_ssh_public_key: ${{ vars.TF_VAR_admin_ssh_public_key }}
+      TF_VAR_tailscale_authkey: ${{ secrets.TF_VAR_tailscale_authkey }}
+      TF_VAR_admin_ip_cidrs: ${{ vars.TF_VAR_admin_ip_cidrs }}
+      ADMIN_USERNAME: openclaw-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init (state read only)
+        working-directory: openclaw/terraform
+        run: terraform init
+
+      - name: Get droplet IP from state
+        id: state
+        working-directory: openclaw/terraform
+        run: |
+          if ip=$(terraform output -raw droplet_public_ip 2>/dev/null) && [ -n "$ip" ]; then
+            echo "droplet_ip=$ip" >> "$GITHUB_OUTPUT"
+            echo "provisioned=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No droplet_public_ip in state — nothing provisioned yet, nothing to check."
+            echo "provisioned=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write deploy key
+        if: steps.state.outputs.provisioned == 'true'
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_DEPLOY_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+
+      - name: Run healthcheck.sh
+        if: steps.state.outputs.provisioned == 'true'
+        env:
+          DROPLET_IP: ${{ steps.state.outputs.droplet_ip }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" bash ~/molted-magic/openclaw/scripts/healthcheck.sh

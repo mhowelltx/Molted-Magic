@@ -1,5 +1,85 @@
-# Placeholder — Session 8. Scheduled: SSH in, git pull, re-run configure.sh
-# (idempotent), restart the daemon.
 name: update
+
+# Weekly, plus on-demand via workflow_dispatch. Syncs the latest
+# openclaw/scripts + openclaw/config from this repo onto the droplet and
+# re-runs configure.sh (idempotent — see its own header comment). Doc 1
+# originally described this as "git pull on the box", but no git-clone-on-box
+# mechanism was ever built (provision.yml syncs files by scp'ing them from
+# the runner's checkout instead) — this reuses that same approach for
+# consistency rather than introducing a second, different sync mechanism.
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC — adjust if a different cadence is wanted
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_TOKEN_app_terraform_io }}
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_admin_ssh_public_key: ${{ vars.TF_VAR_admin_ssh_public_key }}
+      TF_VAR_tailscale_authkey: ${{ secrets.TF_VAR_tailscale_authkey }}
+      TF_VAR_admin_ip_cidrs: ${{ vars.TF_VAR_admin_ip_cidrs }}
+      ADMIN_USERNAME: openclaw-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform init (state read only — no plan/apply here)
+        working-directory: openclaw/terraform
+        run: terraform init
+
+      # Reads the droplet's IP from existing state rather than failing if
+      # none exists yet: this workflow being enabled (schedule included)
+      # shouldn't itself require infrastructure to already be live. No
+      # droplet yet is the expected, current state of this project — not a
+      # failure — so this step succeeds either way and later steps just
+      # don't run if there's nothing to update.
+      - name: Get droplet IP from state
+        id: state
+        working-directory: openclaw/terraform
+        run: |
+          if ip=$(terraform output -raw droplet_public_ip 2>/dev/null) && [ -n "$ip" ]; then
+            echo "droplet_ip=$ip" >> "$GITHUB_OUTPUT"
+            echo "provisioned=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No droplet_public_ip in state — nothing provisioned yet, nothing to update."
+            echo "provisioned=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write deploy key
+        if: steps.state.outputs.provisioned == 'true'
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_DEPLOY_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+
+      - name: Sync scripts and config to the droplet
+        if: steps.state.outputs.provisioned == 'true'
+        env:
+          DROPLET_IP: ${{ steps.state.outputs.droplet_ip }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" "mkdir -p ~/molted-magic/openclaw"
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 -r \
+            openclaw/scripts openclaw/config \
+            "$ADMIN_USERNAME@$DROPLET_IP:~/molted-magic/openclaw/"
+
+      - name: Re-run configure.sh (renders config, installs/restarts the daemon)
+        if: steps.state.outputs.provisioned == 'true'
+        env:
+          DROPLET_IP: ${{ steps.state.outputs.droplet_ip }}
+        run: |
+          anthropic_escaped=$(printf '%q' "${{ secrets.OPENCLAW_ANTHROPIC_KEY }}")
+          telegram_escaped=$(printf '%q' "${{ secrets.TELEGRAM_BOT_TOKEN }}")
+          # shellcheck disable=SC2087 # client-side expansion of $anthropic_escaped/$telegram_escaped into the heredoc is intentional here, not the usual footgun
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "$ADMIN_USERNAME@$DROPLET_IP" bash -s <<REMOTE
+          set -euo pipefail
+          export OPENCLAW_ANTHROPIC_KEY=$anthropic_escaped
+          export TELEGRAM_BOT_TOKEN=$telegram_escaped
+          bash ~/molted-magic/openclaw/scripts/configure.sh
+          REMOTE

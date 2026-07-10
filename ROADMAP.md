@@ -68,9 +68,11 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 8 — update.yml + healthcheck.yml
 
-- [ ] `update.yml`: SSH in, `git pull`, re-run `configure.sh`, restart daemon
-- [ ] `healthcheck.yml`: scheduled `healthcheck.sh` run
-- [ ] Verify: syntax checks, healthcheck reviewed as read-only
+- [x] Fixed a real gap first: neither `install.sh` nor `configure.sh` ever registered/restarted an OpenClaw daemon, so "restart the daemon" had nothing to act on. Added daemon install/restart logic to `configure.sh` (idempotent: installs only if not already present, always restarts to pick up the freshly-rendered config) — flagged as another unverified-CLI-surface assumption, same category as the rest of `openclaw.json.tmpl`'s schema.
+- [x] `update.yml`: weekly schedule + `workflow_dispatch`. Reads the droplet IP from HCP Terraform state (not a git pull on the box — no such mechanism was ever built; reuses provision.yml's scp-from-runner approach instead for consistency), syncs `openclaw/scripts` + `openclaw/config`, re-runs `configure.sh` (which now also handles the daemon restart)
+- [x] `healthcheck.yml`: every 6 hours + `workflow_dispatch`. Runs the already-deployed `healthcheck.sh` remotely, read-only, no re-sync
+- [x] Both workflows gracefully no-op (succeed, don't fail) when Terraform state has no droplet yet, rather than failing loudly — deliberate: no infrastructure exists yet (expected, current project state), and failing loudly on that would just be false-alarm spam from the moment these schedules are enabled. They still fail loudly once infrastructure exists and is actually unreachable/unhealthy.
+- [x] Verify: `actionlint` clean on both; diffed all four workflows' `env:` blocks against each other (not just against memory) — all four use character-for-character identical secret/variable names
 
 ## Parallel, anytime — Moltbook research
 
