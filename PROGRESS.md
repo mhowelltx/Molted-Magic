@@ -4,13 +4,21 @@ Read this first. Dynamic — updated at the end of every session. See [`ROADMAP.
 
 ## Current phase
 
-Session 9 (real local ground truth on OpenClaw's CLI/config schema) — complete, and it was a significant, valuable detour. Next up: Session 10 (Moltbook research write-up).
+Session 10 (Moltbook research write-up) — complete. Next up: Session 11 (`CLAUDE.md`/`agent.md` updates authorizing the integration).
 
 ## Context: new plan direction
 
 After Session 8, all 8 original sessions were done but no real `terraform apply` had ever run. The user then asked for a plan to reach "an agent connected to Moltbook, running from the VPS." That plan (approved, 8 new sessions: 9–16) is now underway. Full plan detail lives in the approved plan file; this doc tracks what's actually been done.
 
-## Last session — Session 9 (a bigger deal than originally scoped)
+## Last session — Session 10 (Moltbook research write-up)
+
+Populated `moltbook/notes/registration-flow.md`, `notes/api-endpoints.md`, `notes/heartbeat-and-rate-limits.md`, `findings.md`, and `open-questions.md` with the real Moltbook research gathered during planning (multiple consistent `WebFetch` reads of `moltbook.com/skill.md` and `/heartbeat.md` — internally consistent, unlike the unrelated `openclaw.ai` research that prompted Session 9).
+
+Resolved the one open question flagged during planning: exactly how Moltbook confirms the human-ownership tweet. A closer read of `skill.md` surfaced it — registration returns a `claim_url` for the human (who verifies their email there, then posts the tweet); the agent polls `GET /api/v1/agents/status` for `"pending_claim"` → `"claimed"`. No tweet text/format is documented (presumably shown on the claim page itself) — noted as a smaller remaining open item for `register.js` (Session 12) to handle by directing the human to the claim URL rather than guessing at wording.
+
+Verify: `grep -r moltbook openclaw/` confirmed zero references from `openclaw/` into the top-level research-only `moltbook/`, consistent with `CLAUDE.md`'s boundary (the deployed client will live at `openclaw/moltbook/`, a separate path, in Session 12). Removed `moltbook/notes/.gitkeep` now that real files exist there.
+
+## Prior session — Session 9 (real local ground truth on OpenClaw's CLI/config schema)
 
 The original plan explicitly said: don't rewrite `openclaw.json.tmpl`/`configure.sh` based on unreliable web research — keep them as an unverified best-effort mapping. Then, mid-session, the user asked a better question: **what can we do *locally* to confirm the config before ever deploying to the cloud?** That reframing turned into Session 9.
 
@@ -30,22 +38,23 @@ The original plan explicitly said: don't rewrite `openclaw.json.tmpl`/`configure
 6. **Verified for real, not just reviewed**: ran `openclaw config validate --json` against the *old* template shape first — confirmed `"valid": false` (`agents: "Invalid input"`) — real proof it would have failed to boot the real gateway on a live box. Then validated the *new* shape — `"valid": true`. Then ran `configure.sh` itself end-to-end (scratch directory, dummy env vars, no CLI on PATH — same pattern as Sessions 4–5) and fed its actual rendered `openclaw.json` output through real validation too — also `"valid": true`. `shellcheck` clean on the updated `configure.sh`.
 7. Cleaned up all scratch artifacts (test npm install, test config profile) — nothing left behind outside the repo.
 
-**Why this matters beyond just this session**: this is the first time in the project that OpenClaw's actual schema has been checked against the real, installed CLI rather than inferred from planning-doc prose or (unreliable) web research. It resolves several "honest gaps" that had been carried since Session 4 with real evidence instead of more guessing.
-
-## Honest gaps remaining after Session 9 (real, not guessed at)
+## Honest gaps remaining (real, not guessed at)
 
 - `daemon install`'s actual service-install behavior (launchd/systemd/schtasks) has still never run on a real Linux box — the command is confirmed real, its live behavior isn't.
-- The exact CLI for triggering a single scheduled agent turn (for Session 14's heartbeat) wasn't determined this session — `agents.defaults.heartbeat.prompt`/`target` look like the right config-side mechanism (confirmed schema), but how/whether to *also* trigger an ad-hoc turn outside the heartbeat's own schedule (e.g. for testing) wasn't explored. Deferred to Session 14/16.
+- The exact CLI for triggering a single scheduled agent turn (for Session 14's heartbeat) wasn't determined — `agents.defaults.heartbeat.prompt`/`target` look like the right config-side mechanism (confirmed schema), but how/whether to *also* trigger an ad-hoc turn outside the heartbeat's own schedule (e.g. for testing) hasn't been explored. Deferred to Session 14/16.
 - Real MCP tool-registration mechanics (`mcp.servers`) are schema-confirmed but never actually exercised end-to-end — deferred to Session 12.
+- Exact tweet text/format for Moltbook's ownership verification isn't documented (presumably shown on the claim page) — `register.js` (Session 12) should direct the human there rather than guess.
+- Exact upvote/downvote endpoint paths for comments vs. posts aren't fully disambiguated in Moltbook's prose docs — verify with a real authenticated call in Session 12, don't guess further from documentation.
 - Everything that was already only-provable-live stays that way: real droplet health, Tailscale join, actual `install.sh` execution on Ubuntu, real DigitalOcean spend.
 
 ## Next session
 
-Session 10: populate `moltbook/notes/`, `moltbook/findings.md`, `moltbook/open-questions.md` with the real Moltbook API research already gathered earlier in the planning conversation (registration → verify → ownership-tweet flow, full endpoint list, rate limits, `heartbeat.md`'s five-step priority order). Closes the long-pending "Parallel, anytime — Moltbook research" item from the original roadmap.
+Session 11: rewrite `CLAUDE.md`'s "Moltbook boundary" from research-only to narrowly-scoped authorization, and add a Moltbook section to `openclaw/config/agent.md` naming it as the one specific, named exception to the no-fetch-and-execute rule (full autonomy on Moltbook actions specifically, everything else stays under the existing consent posture).
 
 ## Open decisions (resolved)
 
 - ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, execution mode: local.
 - ~~SSH key provisioning~~ — resolved: Terraform registers it directly via `digitalocean_ssh_key.admin`, no manual DO upload step.
 - ~~GitHub secrets: repo-level vs environment-level~~ — resolved: repository secrets, no environment protection rules for now.
-- ~~OpenClaw config/CLI schema~~ — resolved for real via Session 9's local verification (see above). Remaining unknowns are narrow and named, not a blanket "unverified" flag anymore.
+- ~~OpenClaw config/CLI schema~~ — resolved for real via Session 9's local verification. Remaining unknowns are narrow and named, not a blanket "unverified" flag anymore.
+- ~~How Moltbook confirms human-ownership~~ — resolved via Session 10: `claim_url` + polling `/api/v1/agents/status`.

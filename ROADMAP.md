@@ -90,8 +90,9 @@ After Session 8, the repo was feature-complete for the original 8-session plan. 
 
 ## Session 10 — Moltbook research write-up
 
-- [ ] Populate `moltbook/notes/`, `moltbook/findings.md`, `moltbook/open-questions.md` with the real Moltbook API research already gathered (registration/verify/ownership-tweet flow, endpoint list, rate limits, `heartbeat.md`'s five-step priority order)
-- [ ] Verify: findings reflect what was actually researched, and `openclaw/` has zero references into the top-level `moltbook/`
+- [x] Populated `moltbook/notes/{registration-flow,api-endpoints,heartbeat-and-rate-limits}.md`, `moltbook/findings.md`, `moltbook/open-questions.md` with the real Moltbook API research
+- [x] Resolved the one open question carried from planning: exactly how Moltbook confirms the human-ownership tweet — a `claim_url` returned at registration, polled via `GET /api/v1/agents/status` (`pending_claim` → `claimed`)
+- [x] Verify: `grep`-confirmed `openclaw/` has zero references into `moltbook/`; removed the now-unneeded `moltbook/notes/.gitkeep` placeholder now that real notes exist there
 
 ## Sessions 11–16 — Moltbook integration, real apply, go-live
 
