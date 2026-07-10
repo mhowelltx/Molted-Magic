@@ -4,17 +4,19 @@ Read this first. Dynamic — updated at the end of every session. See [`ROADMAP.
 
 ## Current phase
 
-Session 3 (cloud-init hardening + Tailscale) — complete. Next up: Session 4 (install.sh / configure.sh / healthcheck.sh).
+Session 4 (install.sh / configure.sh / healthcheck.sh) — complete, and pulled the config-template part of Session 5 forward with it. Remaining Session 5 work is just `agent.md`. Next up: write `agent.md`, then Session 6 (`provision.yml`).
 
 ## Last session
 
-Session 3: wrote real content for `openclaw/cloud-init/user-data.yml.tmpl` — non-root admin user (`openclaw-admin` by default) with sudo, root login and password auth disabled, ufw allowing SSH only (deny incoming / allow outgoing by default), unattended-upgrades enabled, Tailscale installed and joined via `tailscale up --authkey` (skipped if the auth key variable is empty rather than run with an empty key).
+Session 4: wrote all three scripts in `openclaw/scripts/`.
 
-Resolved the carry-forward item from Session 2: `main.tf`'s `templatefile()` reference to the sibling `../cloud-init/` directory failed under HCP Terraform's default `remote` execution mode (confirmed by testing). Fixed by switching the `molted-magic-openclaw` workspace to **local execution mode** via the HCP Terraform API — state still lives in HCP Terraform (locking, history), but `plan`/`apply` now compute wherever `terraform` is invoked, which has the full repo checked out. This is documented in a comment in `backend.tf` so a future session doesn't flip it back to `remote` without also fixing the directory reference. This also better fits how `provision.yml` (Session 6) will need to chain Terraform outputs straight into an SSH step.
+- **`install.sh`**: idempotent Node 22+ install (skips if already >= 22), then the OpenClaw official installer. Doc 2 says "review the fetched script before executing" — that instruction is a one-time human action and can't literally happen on every automated run, so it's operationalized as a **pinned SHA-256 checksum gate**: the script refuses to run the installer at all until a `openclaw-install.sha256` file exists next to it (created by a human who fetched, read, and hashed the real installer once), and refuses again if a re-fetch's hash ever stops matching the pinned value. That file does not exist yet — creating it is a manual step for whenever this is first run for real against openclaw.ai's actual installer.
+- **`configure.sh`**: renders `openclaw/config/openclaw.json.tmpl` into `~/.openclaw/openclaw.json` and copies `agent.md` alongside it. Idempotent (regenerates deterministically from template + env every run, no accumulation). Requires `OPENCLAW_ANTHROPIC_KEY` and `TELEGRAM_BOT_TOKEN` env vars (fails loudly if unset). Defaults: workspace `~/openclaw-workspace`, model `claude-haiku-4-5-20251001` (cheap/fast per doc 2 Phase 2), tool allowlist stays at the template's minimal set — widening it is explicitly a manual template edit, never something this script does.
+- **`healthcheck.sh`**: thin, read-only wrapper around `openclaw doctor`, exit-code driven for use by both `healthcheck.yml` (Session 8) and manual/cron checks.
 
-Added two new Terraform variables: `admin_ssh_public_key` (not secret, but templated rather than hardcoded — DigitalOcean's `ssh_keys` droplet attribute only targets root, so the cloud-init-created non-root admin user needs its own explicit key) and `tailscale_authkey` (sensitive, default `""`, sourced via `TF_VAR_tailscale_authkey`).
+Fleshed out `openclaw/config/openclaw.json.tmpl` with real content (workspace path, `agents` list with one entry per the Extensibility notes, model, `tool_allowlist: [web_search, file_read, file_write]`, `consent_mode: true`, Telegram channel block) instead of leaving it as a Session 5 placeholder — same lesson as Sessions 2–3: writing a consumer script (`configure.sh`) against an empty placeholder template would just mean redoing the wiring in Session 5. `agent.md` (the persona file) is untouched and remains the Session 1 placeholder; nothing depended on its actual content this session.
 
-Verified for real: `terraform validate` passed; `terraform plan` (using a local, gitignored, dummy `terraform.tfvars` — fake SSH key fingerprint and public key, TEST-NET-3 example IP, deleted after the run) came back clean, still 3 to add / 0 change / 0 destroy. Used `terraform console` to render the actual cloud-init output with the template variables substituted and reviewed it line-by-line against doc 2 Phase 1's checklist (non-root user, SSH-key-only, ufw, unattended-upgrades, Tailscale) — all present and correctly rendered. One early bug caught this way: an explanatory comment in the template itself contained literal `${...}` text, which `templatefile()` tried to parse as an expression and errored on — fixed by rewording the comment.
+Installed shellcheck locally (via winget) and ran it against all three scripts: clean except one intentional `SC2016` (single-quoted `${VAR}` tokens passed to `envsubst`'s variable-list argument, which must stay unexpanded) — suppressed with a documented `# shellcheck disable=SC2016` comment rather than silently ignored. Cross-checked all three scripts against doc 2 Phases 2–4 line by line — no gaps found.
 
 ## Blockers
 
@@ -22,13 +24,14 @@ None currently.
 
 ## Honest gaps (flagged, not glossed over)
 
-- No `cloud-init schema` validator or Python/PyYAML available locally, so the cloud-init YAML was checked by rendering + manual line-by-line review against the doc 2 checklist, not a formal schema lint.
-- Tailscale actually joining the tailnet, and the non-root user actually being reachable over SSH, can't be proven without a live droplet boot — this remains deferred to the user's own later `terraform apply`.
+- **The `openclaw.json.tmpl` field names/schema are a best-effort mapping, not verified against real OpenClaw product docs.** `tool_allowlist`, `anthropic_api_key_env`, `persona_file`, `consent_mode`, `channels.telegram.bot_token_env` are inferred from what `openclaw-iac-automation-plan.md` and `openclaw-isolated-setup-plan.md` describe in prose, not from an actual OpenClaw CLI/config reference (none was available to check against). Before this is ever run against a real OpenClaw install, these field names need checking against whatever `openclaw onboard` / the real config schema actually expects, and adjusted if they don't match.
+- `install.sh`'s checksum-pinning step has never been exercised against the real `https://openclaw.ai/install.sh` (no live box, and this session had no way to fetch and review it) — the *mechanism* is verified (shellcheck, logic review), the *pin* itself doesn't exist yet.
+- As before: real execution of any of these three scripts requires a live droplet — still deferred to the user's own later `terraform apply`.
 
 ## Next session
 
-Session 4: write `openclaw/scripts/install.sh` (Node 22+, OpenClaw official installer — reviewed, not blind-piped), `configure.sh` (narrow workspace dir, cheap default model, minimal tool allowlist, Telegram/BotFather channel wiring), and `healthcheck.sh` (wraps `openclaw doctor`, exit-code driven). Verify via shellcheck + manual cross-check against doc 2 Phases 2–4; real execution is deferred to a live box.
+Write `openclaw/config/agent.md` (the OpenClaw persona/system-prompt file) — the one remaining piece of Session 5. Then Session 6: wrap Terraform init/plan/apply + cloud-init + scripts into `provision.yml`, with `apply` gated behind manual `workflow_dispatch` only.
 
 ## Open decisions (resolved)
 
-- ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, **execution mode: local** (changed from the HCP default of `remote` in Session 3 — see `backend.tf` comment for why).
+- ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, execution mode: local.

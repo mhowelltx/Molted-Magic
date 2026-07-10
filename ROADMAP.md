@@ -31,16 +31,16 @@ Static build sequence. Check items off as sessions complete; log the details of 
 
 ## Session 4 — install.sh / configure.sh / healthcheck.sh
 
-- [ ] `install.sh`: Node 22+, OpenClaw official installer (reviewed, not blind-piped)
-- [ ] `configure.sh`: narrow workspace dir, cheap default model, minimal tool allowlist, Telegram/BotFather channel wiring
-- [ ] `healthcheck.sh`: wraps `openclaw doctor`, exit-code driven
-- [ ] Verify: shellcheck + manual cross-check against doc 2 Phases 2–4 (real execution deferred to a live box)
+- [x] `install.sh`: Node 22+ (idempotent version check), OpenClaw official installer gated by a pinned SHA-256 checksum (not blind-piped — see PROGRESS.md for why "review before piping" had to become a checksum gate rather than a per-run manual step)
+- [x] `configure.sh`: narrow workspace dir, cheap default model (`claude-haiku-4-5-20251001`), minimal tool allowlist, Telegram/BotFather channel wiring, consent mode — all rendered via `openclaw/config/openclaw.json.tmpl` (fleshed out ahead of Session 5, same coupling lesson as Sessions 2–3)
+- [x] `healthcheck.sh`: wraps `openclaw doctor`, exit-code driven, read-only
+- [x] Verify: shellcheck clean on all three (one intentional SC2016 suppressed with a documented disable comment); manual cross-check against doc 2 Phases 2–4 line by line. Real execution deferred to a live box.
 
 ## Session 5 — openclaw.json.tmpl + agent.md
 
-- [ ] Config template (model, allowlist shape, workspace path placeholders)
-- [ ] Persona/system-prompt file
-- [ ] Verify: template renders with example values substituted, matches "cheap model / minimal allowlist / capped separate key" guardrails
+- [x] Config template (model, allowlist shape, workspace path placeholders) — done in Session 4, ahead of schedule, because `configure.sh` needed real content to render meaningfully
+- [ ] Persona/system-prompt file (`agent.md` is still the Session 1 placeholder — remaining Session 5 work)
+- [ ] Verify: template renders with example values substituted, matches "cheap model / minimal allowlist / capped separate key" guardrails (done for the config template in Session 4; still applies to agent.md content once written)
 
 ## Session 6 — provision.yml
 
