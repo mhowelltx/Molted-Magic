@@ -1,22 +1,46 @@
 {
-  "workspace": "${OPENCLAW_WORKSPACE_DIR}",
-  "agents": [
-    {
-      "name": "openclaw",
-      "model": "${OPENCLAW_MODEL}",
-      "anthropic_api_key_env": "OPENCLAW_ANTHROPIC_KEY",
-      "persona_file": "${OPENCLAW_CONFIG_DIR}/agent.md",
-      "consent_mode": true,
-      "tool_allowlist": [
-        "web_search",
-        "file_read",
-        "file_write"
-      ],
-      "channels": {
-        "telegram": {
-          "bot_token_env": "TELEGRAM_BOT_TOKEN"
+  "agents": {
+    "defaults": {
+      "model": "anthropic/${OPENCLAW_MODEL}"
+    },
+    "list": [
+      {
+        "id": "openclaw",
+        "name": "openclaw",
+        "workspace": "${OPENCLAW_WORKSPACE_DIR}",
+        "default": true
+      }
+    ]
+  },
+  "tools": {
+    "profile": "minimal",
+    "web": {
+      "search": {
+        "enabled": true
+      }
+    },
+    "fs": {
+      "workspaceOnly": true
+    }
+  },
+  "channels": {
+    "telegram": {
+      "botToken": {
+        "source": "env",
+        "provider": "default",
+        "id": "TELEGRAM_BOT_TOKEN"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "apiKey": {
+          "source": "env",
+          "provider": "default",
+          "id": "OPENCLAW_ANTHROPIC_KEY"
         }
       }
     }
-  ]
+  }
 }

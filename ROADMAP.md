@@ -74,13 +74,29 @@ Static build sequence. Check items off as sessions complete; log the details of 
 - [x] Both workflows gracefully no-op (succeed, don't fail) when Terraform state has no droplet yet, rather than failing loudly — deliberate: no infrastructure exists yet (expected, current project state), and failing loudly on that would just be false-alarm spam from the moment these schedules are enabled. They still fail loudly once infrastructure exists and is actually unreachable/unhealthy.
 - [x] Verify: `actionlint` clean on both; diffed all four workflows' `env:` blocks against each other (not just against memory) — all four use character-for-character identical secret/variable names
 
-## Parallel, anytime — Moltbook research
+---
 
-- [ ] Populate `moltbook/notes/`, `moltbook/findings.md`, `moltbook/open-questions.md`
-- [ ] Verify: findings reflect what was actually researched, and `openclaw/` has zero references into `moltbook/`
+After Session 8, the repo was feature-complete for the original 8-session plan. Sessions 9+ below implement a new, separate plan: connecting an OpenClaw agent to Moltbook, running from the VPS — the "distinct, higher-trust decision" the (now-superseded) Moltbook boundary language always said would need its own sign-off. See `CLAUDE.md`'s current "Moltbook boundary" section for the up-to-date guardrail and PROGRESS.md for full session-by-session detail.
+
+## Session 9 — Real local ground truth on OpenClaw's CLI/config schema
+
+- [x] Installed Node.js locally (winget) and the real `openclaw` npm package (`openclaw@2026.6.11`, scratch directory, not global) — confirmed a real, actively-published package (GitHub Actions CI, real maintainers), not the unreliable marketing-site research from earlier in this planning session.
+- [x] Used the real CLI directly: `openclaw config schema` (2.2MB real JSON schema) and `openclaw config validate` — **not** further web research.
+- [x] **Confirmed real, fixed several wrong assumptions**: `agents.list[].{id, name, workspace, model}` (not a flat `agents` array with `name`/`persona_file`/`anthropic_api_key_env`); `agents.defaults.model` / per-agent `model` as `"provider/model"` string (e.g. `"anthropic/claude-haiku-4-5-20251001"`); secrets as `{source: "env", provider: "default", id: "ENV_VAR_NAME"}` (`SecretRef`) for both `channels.telegram.botToken` and `models.providers.anthropic.apiKey`; tool allowlisting is `tools.profile` ("minimal"/"coding"/"messaging"/"full") + `tools.web.search.enabled` + `tools.fs.workspaceOnly` — not a per-agent `tool_allowlist` array; persona is delivered as a **workspace bootstrap file** (`SOUL.md`, alongside `USER.md`/`HEARTBEAT.md`/`IDENTITY.md`), not a `persona_file` config key.
+- [x] **Confirmed our existing guess was actually right**: `daemon install`/`daemon status`/`daemon restart` are real (confirmed-real legacy alias for `gateway` service management, per `openclaw --help`) — Session 8's daemon logic didn't need fixing, just the config template and persona delivery around it.
+- [x] Rewrote `openclaw/config/openclaw.json.tmpl` and `openclaw/scripts/configure.sh` (persona → `$WORKSPACE_DIR/SOUL.md`, added an `openclaw config validate` pre-restart check that refuses to restart the gateway into a broken config) to match.
+- [x] Verify: real `openclaw config validate --json` against both the old template shape (confirmed `"valid": false` — proof it would have failed to boot the gateway on a real box) and the new one (confirmed `"valid": true`); re-ran `configure.sh`'s actual scratch-directory output through real validation too (not just a hand-crafted example) — also `"valid": true`. `shellcheck` clean on `configure.sh`.
+- [ ] Not yet confirmed live: `daemon install`'s actual service-install behavior (launchd/systemd/schtasks) on a real Linux box, and the exact CLI for triggering a single scheduled agent turn (relevant to Session 14's heartbeat) — deferred to Session 16's go-live, per the plan.
+
+## Session 10 — Moltbook research write-up
+
+- [ ] Populate `moltbook/notes/`, `moltbook/findings.md`, `moltbook/open-questions.md` with the real Moltbook API research already gathered (registration/verify/ownership-tweet flow, endpoint list, rate limits, `heartbeat.md`'s five-step priority order)
+- [ ] Verify: findings reflect what was actually researched, and `openclaw/` has zero references into the top-level `moltbook/`
+
+## Sessions 11–16 — Moltbook integration, real apply, go-live
+
+See `PROGRESS.md` and the approved plan for full detail: `CLAUDE.md`/`agent.md` updates (Session 11), `openclaw/moltbook/` client (Session 12), wiring into config/workflows (Session 13), heartbeat/scheduling (Session 14), secrets (Session 15), and the real first-ever `terraform apply` + go-live (Session 16).
 
 ---
 
-After Session 8, the repo is feature-complete for the current plan. The first real `terraform apply` against a live billed account is the user's own later action, not part of this roadmap.
-
-This sequence merges the build order from the original `openclaw-iac-automation-plan.md` and `openclaw-isolated-setup-plan.md` planning docs. See [`CLAUDE.md`](CLAUDE.md) for the guardrails that apply throughout.
+This sequence merges the build order from the original `openclaw-iac-automation-plan.md` and `openclaw-isolated-setup-plan.md` planning docs (Sessions 0–8), then continues with the Moltbook integration plan approved afterward (Sessions 9+). See [`CLAUDE.md`](CLAUDE.md) for the guardrails that apply throughout.

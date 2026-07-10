@@ -4,50 +4,48 @@ Read this first. Dynamic — updated at the end of every session. See [`ROADMAP.
 
 ## Current phase
 
-Session 8 (`update.yml` + `healthcheck.yml`) — complete. **All 8 sessions in the current roadmap are now done.** The repo is feature-complete for the plan approved at the start of this project. What's left is either open-ended (Moltbook research) or the user's own deliberate action (the first real `terraform apply`).
+Session 9 (real local ground truth on OpenClaw's CLI/config schema) — complete, and it was a significant, valuable detour. Next up: Session 10 (Moltbook research write-up).
 
-## Last session
+## Context: new plan direction
 
-Before writing `update.yml`, caught and fixed a real gap: doc 1 says `update.yml` should "restart the daemon," and doc 2 Phase 5 says to register OpenClaw as a persistent daemon (`openclaw daemon install`) — but neither `install.sh` nor `configure.sh` ever actually did that. "Restart the daemon" had nothing to act on. Fixed by adding daemon lifecycle logic to `configure.sh` itself (not `install.sh`): checks `openclaw daemon status`, runs `openclaw daemon install` only if not already installed, then always runs `openclaw daemon restart` to pick up the freshly-rendered config. This lives in `configure.sh` because that's the idempotent script that reruns on every `update.yml` pass — putting daemon lifecycle there means `update.yml` doesn't need any separate "restart" step of its own. Re-verified with shellcheck (clean) and the scratch end-to-end test from Sessions 4–5 (still passes — the no-CLI branch is unaffected).
+After Session 8, all 8 original sessions were done but no real `terraform apply` had ever run. The user then asked for a plan to reach "an agent connected to Moltbook, running from the VPS." That plan (approved, 8 new sessions: 9–16) is now underway. Full plan detail lives in the approved plan file; this doc tracks what's actually been done.
 
-Wrote `.github/workflows/update.yml`: weekly schedule (`0 6 * * 1`) + `workflow_dispatch`. Doc 1 originally described this as "git pull on the box," but no git-clone-on-box mechanism was ever built — `provision.yml` syncs files by `scp`ing them from the runner's checkout instead, so `update.yml` reuses that same approach rather than introducing a second, different sync mechanism. Reads the droplet's current IP from HCP Terraform state via `terraform output` (there's no `apply` step here to chain outputs from directly).
+## Last session — Session 9 (a bigger deal than originally scoped)
 
-Wrote `.github/workflows/healthcheck.yml`: every 6 hours + `workflow_dispatch`. Runs the already-deployed `healthcheck.sh` remotely — read-only, no re-sync of scripts.
+The original plan explicitly said: don't rewrite `openclaw.json.tmpl`/`configure.sh` based on unreliable web research — keep them as an unverified best-effort mapping. Then, mid-session, the user asked a better question: **what can we do *locally* to confirm the config before ever deploying to the cloud?** That reframing turned into Session 9.
 
-**Real design decision, not just implementation**: both new workflows gracefully no-op (succeed, green) when Terraform state has no droplet yet, rather than failing loudly. Reasoning: no real infrastructure exists yet — that's the actual, expected current state of this project, not a failure condition. Enabling `healthcheck.yml`'s every-6-hours schedule with a "fail if unreachable" design as originally described in doc 1 would have started spamming failure notifications immediately upon merge, long before any real droplet exists. Both workflows still fail loudly once infrastructure genuinely exists and is unreachable or unhealthy — the graceful skip only covers the "nothing provisioned yet" case.
+**What happened, concretely:**
+1. Installed Node.js locally via winget (this machine had none of Node/npm/WSL2/Docker before this).
+2. Ran `npm view openclaw` — real, structured npm registry data (not a webpage summary): `openclaw@2026.6.11`, "Multi-channel AI gateway with extensible messaging integrations," real GitHub repo (`github.com/openclaw/openclaw`), real maintainers, published a week ago by GitHub Actions CI. This alone was far more trustworthy than the marketing-site fetches from earlier in the planning conversation.
+3. Installed the real package into a scratch directory (not global, nothing added to this repo or committed) and ran the actual CLI: `openclaw --help`, `openclaw config --help`, `openclaw config schema` (a real, complete 2.2MB JSON Schema for `openclaw.json`), and `openclaw config validate`.
+4. **This settled, for real, several things that were previously flagged as "unverified best-effort mappings" since Session 4:**
+   - `agents` is `{defaults: {...}, list: [...]}`, not a flat array. List items use `id`/`name`/`workspace`/`model` — no `persona_file`, no `anthropic_api_key_env`.
+   - Model is a `"provider/model"` string (e.g. `"anthropic/claude-haiku-4-5-20251001"`), confirmed via schema.
+   - Secrets use a real `SecretRef` shape: `{"source": "env", "provider": "default", "id": "ENV_VAR_NAME"}` — confirmed for both `channels.telegram.botToken` and `models.providers.anthropic.apiKey`.
+   - There is no per-agent `tool_allowlist`. Real mechanism: top-level `tools.profile` (a real enum: `"minimal"|"coding"|"messaging"|"full"`) plus fine-grained toggles — `tools.web.search.enabled` and `tools.fs.workspaceOnly` map cleanly onto exactly what was wanted ("web search + file read/write within the workspace only"), more cleanly than the old made-up array ever did.
+   - There's no `persona_file` config key. Persona is delivered via a **workspace bootstrap file** — the schema's `agents.defaults.skipOptionalBootstrapFiles` enum lists the real convention: `SOUL.md`, `USER.md`, `HEARTBEAT.md`, `IDENTITY.md`. `agent.md`'s content is unaffected; only its delivery path changed (workspace `SOUL.md` instead of copied into the config dir).
+   - **The one thing Session 8 already had right**: `daemon install`/`daemon status`/`daemon restart` are real commands — confirmed via `openclaw --help` as a legacy alias for `gateway` service management. No change needed there.
+   - Also confirmed real (for later sessions): `mcp.servers.<name>.{command, args, env, cwd, url, transport}` (Session 12's Moltbook client can be wired in this way), and the full `agents.defaults.heartbeat` schema — `every`, `prompt`, `target`, `to`, `directPolicy`, `isolatedSession`, `skipWhenBusy`, `timeoutSeconds` all confirmed, resolving what was flagged as Session 14's biggest open question.
+5. Rewrote `openclaw/config/openclaw.json.tmpl` and `openclaw/scripts/configure.sh` to match. Added an `openclaw config validate` call before restarting the gateway in `configure.sh`, so a bad config now fails loudly instead of restarting into a broken state.
+6. **Verified for real, not just reviewed**: ran `openclaw config validate --json` against the *old* template shape first — confirmed `"valid": false` (`agents: "Invalid input"`) — real proof it would have failed to boot the real gateway on a live box. Then validated the *new* shape — `"valid": true`. Then ran `configure.sh` itself end-to-end (scratch directory, dummy env vars, no CLI on PATH — same pattern as Sessions 4–5) and fed its actual rendered `openclaw.json` output through real validation too — also `"valid": true`. `shellcheck` clean on the updated `configure.sh`.
+7. Cleaned up all scratch artifacts (test npm install, test config profile) — nothing left behind outside the repo.
 
-**Verified for real**: `actionlint` clean on both new workflows. After the Session 6 case-mismatch bug, added a habit rather than just a one-off fix: diffed the `env:` block of all four workflows (`provision.yml`, `destroy.yml`, `update.yml`, `healthcheck.yml`) against each other and confirmed all four reference character-for-character identical secret/variable names.
+**Why this matters beyond just this session**: this is the first time in the project that OpenClaw's actual schema has been checked against the real, installed CLI rather than inferred from planning-doc prose or (unreliable) web research. It resolves several "honest gaps" that had been carried since Session 4 with real evidence instead of more guessing.
 
-## Where things stand overall
+## Honest gaps remaining after Session 9 (real, not guessed at)
 
-All 8 roadmap sessions are complete:
-1. Repo scaffold
-2. Terraform (droplet + firewall + VPC + SSH key registration)
-3. Cloud-init (hardening + Tailscale)
-4. install.sh / configure.sh / healthcheck.sh
-5. openclaw.json.tmpl + agent.md
-5.5. GitHub Actions secrets
-6. provision.yml
-7. destroy.yml
-8. update.yml + healthcheck.yml
-
-## Honest gaps (the real remaining risk, all previously flagged, none resolved by writing more code)
-
-These are the things that only get resolved by an actual `terraform apply` against a live DigitalOcean account — which stays the user's own deliberate action, not something to do as routine session work:
-
-- `openclaw.json.tmpl`'s field names (`tool_allowlist`, `anthropic_api_key_env`, `persona_file`, `consent_mode`, `channels.telegram.bot_token_env`) and the daemon subcommands added this session (`daemon status`/`daemon install`/`daemon restart`) are all inferred from the two planning docs' prose, never verified against a real OpenClaw CLI/config reference.
-- `install.sh`'s pinned-checksum file for the real installer still doesn't exist — one-time human step whenever this first runs for real.
-- `provision.yml`'s `deploy` job and `destroy.yml` have never run against real infrastructure.
-- `TF_VAR_admin_ip_cidrs` repository variable still isn't set (flagged since Session 6) — blocks any real `plan`/`apply`/`destroy`/`update`/`healthcheck` run in CI until added.
-- `TELEGRAM_BOT_TOKEN` and `TF_VAR_tailscale_authkey` still have no real values — both degrade gracefully, not blockers.
+- `daemon install`'s actual service-install behavior (launchd/systemd/schtasks) has still never run on a real Linux box — the command is confirmed real, its live behavior isn't.
+- The exact CLI for triggering a single scheduled agent turn (for Session 14's heartbeat) wasn't determined this session — `agents.defaults.heartbeat.prompt`/`target` look like the right config-side mechanism (confirmed schema), but how/whether to *also* trigger an ad-hoc turn outside the heartbeat's own schedule (e.g. for testing) wasn't explored. Deferred to Session 14/16.
+- Real MCP tool-registration mechanics (`mcp.servers`) are schema-confirmed but never actually exercised end-to-end — deferred to Session 12.
+- Everything that was already only-provable-live stays that way: real droplet health, Tailscale join, actual `install.sh` execution on Ubuntu, real DigitalOcean spend.
 
 ## Next session
 
-No forced next step from the roadmap — the IaC side is feature-complete for this plan. Reasonable options, in no particular order: (a) start the Moltbook research workstream (`moltbook/notes/`, `findings.md`, `open-questions.md` — pure reading/writing, no infra risk, can run any time), (b) add the `TF_VAR_admin_ip_cidrs` variable and do a real `plan`-only `workflow_dispatch` run of `provision.yml` from the GitHub UI to see it actually execute in CI, or (c) work toward the user's own first real `terraform apply` when ready. Whichever comes next, re-read this file and `ROADMAP.md` first.
+Session 10: populate `moltbook/notes/`, `moltbook/findings.md`, `moltbook/open-questions.md` with the real Moltbook API research already gathered earlier in the planning conversation (registration → verify → ownership-tweet flow, full endpoint list, rate limits, `heartbeat.md`'s five-step priority order). Closes the long-pending "Parallel, anytime — Moltbook research" item from the original roadmap.
 
 ## Open decisions (resolved)
 
 - ~~Terraform state backend~~ — resolved: HCP Terraform, org `FlyingThunderWolfDesign`, workspace `molted-magic-openclaw`, execution mode: local.
 - ~~SSH key provisioning~~ — resolved: Terraform registers it directly via `digitalocean_ssh_key.admin`, no manual DO upload step.
 - ~~GitHub secrets: repo-level vs environment-level~~ — resolved: repository secrets, no environment protection rules for now.
-- ~~update.yml sync mechanism~~ — resolved: scp from the runner (matching provision.yml), not git-pull-on-box.
+- ~~OpenClaw config/CLI schema~~ — resolved for real via Session 9's local verification (see above). Remaining unknowns are narrow and named, not a blanket "unverified" flag anymore.
